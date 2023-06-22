@@ -70,10 +70,10 @@ const _NODE_IDX_LAYOUT_CHECK: usize =
 #[derive(Clone)]
 pub struct Gtree<const ARITY: usize, L: Leaf> {
     /// The internal nodes of the Gtree.
-    inodes: Vec<Inode<ARITY, L>>,
+    inodes: Matrix<128, Inode<ARITY, L>>,
 
     /// The leaf nodes of the Gtree.
-    lnodes: Vec<Lnode<L>>,
+    lnodes: Matrix<128, Lnode<L>>,
 
     /// An index into `self.inodes` which points to the current root of the
     /// Gtree.
@@ -83,12 +83,58 @@ pub struct Gtree<const ARITY: usize, L: Leaf> {
     last_insertion_cache: Option<(LeafIdx, L::Summary)>,
 }
 
+#[derive(Clone)]
+struct Matrix<const COLUMNS: usize, T> {
+    rows: Vec<Vec<T>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MatrixIdx {
+    row: usize,
+    col: usize,
+}
+
+impl<const COLUMNS: usize, T> Matrix<COLUMNS, T> {
+    #[inline]
+    fn get(&self, idx: MatrixIdx) -> &T {
+        unsafe { self.rows.get_unchecked(idx.row).get_unchecked(idx.col) }
+    }
+
+    #[inline]
+    fn get_mut(&mut self, idx: MatrixIdx) -> &mut T {
+        unsafe {
+            self.rows.get_unchecked_mut(idx.row).get_unchecked_mut(idx.col)
+        }
+    }
+
+    #[inline]
+    fn new(value: T) -> (MatrixIdx, Self) {
+        let mut first_row = Vec::with_capacity(COLUMNS);
+        first_row.push(value);
+        let this = Self { rows: vec![first_row] };
+        let idx = MatrixIdx { row: 0, col: 0 };
+        (idx, this)
+    }
+
+    #[inline]
+    fn push(&mut self, value: T) -> MatrixIdx {
+        if self.rows.last().unwrap().len() == COLUMNS {
+            self.rows.push(Vec::with_capacity(COLUMNS));
+        }
+
+        let row = self.rows.len() - 1;
+        let col = unsafe { self.rows.get_unchecked(row).len() };
+        unsafe { self.rows.get_unchecked_mut(row).push(value) };
+        MatrixIdx { row, col }
+    }
+}
+
 /// An identifier for an internal node of the Gtree.
 ///
 /// It can be passed to [`Gtree::inode()`] and [`Gtree::inode_mut()`] to
 /// retrieve the node.
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct InodeIdx(usize);
+struct InodeIdx(MatrixIdx);
 
 impl InodeIdx {
     /// Returns a "dangling" identifier which doesn't point to any inode of
@@ -102,7 +148,7 @@ impl InodeIdx {
     /// 2. For the root node, to indicate that it has no parent.
     #[inline]
     const fn dangling() -> Self {
-        Self(usize::MAX)
+        Self(MatrixIdx { row: usize::MAX, col: 0 })
     }
 
     /// Returns `true` if this identifier is dangling.
@@ -116,7 +162,7 @@ impl InodeIdx {
 
 /// A stable identifier for a particular leaf of the Gtree.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct LeafIdx(usize);
+pub struct LeafIdx(MatrixIdx);
 
 impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
     /// Asserts the invariants of the Gtree.
@@ -342,12 +388,12 @@ impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
 
     #[inline(always)]
     fn inode(&self, idx: InodeIdx) -> &Inode<ARITY, L> {
-        &self.inodes[idx.0]
+        self.inodes.get(idx.0)
     }
 
     #[inline]
     fn inode_mut(&mut self, idx: InodeIdx) -> &mut Inode<ARITY, L> {
-        &mut self.inodes[idx.0]
+        self.inodes.get_mut(idx.0)
     }
 
     /// TODO: docs
@@ -623,12 +669,12 @@ impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
 
     #[inline]
     fn lnode(&self, idx: LeafIdx) -> &Lnode<L> {
-        &self.lnodes[idx.0]
+        self.lnodes.get(idx.0)
     }
 
     #[inline]
     fn lnode_mut(&mut self, idx: LeafIdx) -> &mut Lnode<L> {
-        &mut self.lnodes[idx.0]
+        self.lnodes.get_mut(idx.0)
     }
 
     /// Creates a new Gtree with the given leaf as its first leaf.
@@ -636,18 +682,14 @@ impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
     pub fn new(first_leaf: L) -> Self {
         let summary = first_leaf.summarize();
 
-        let leaf_idx = LeafIdx(0);
-        let root_idx = InodeIdx(0);
+        let leaf_idx = LeafIdx(MatrixIdx { row: 0, col: 0 });
 
-        let dangling = InodeIdx::dangling();
+        let root = Inode::from_leaf(leaf_idx, summary, InodeIdx::dangling());
+        let (root_idx, inodes) = Matrix::new(root);
+        let root_idx = InodeIdx(root_idx);
 
-        let mut inodes = Vec::with_capacity(256);
-        let inode = Inode::from_leaf(leaf_idx, summary, dangling);
-        inodes.push(inode);
-
-        let mut lnodes = Vec::with_capacity(256);
         let lnode = Lnode::new(first_leaf, root_idx);
-        lnodes.push(lnode);
+        let (_, lnodes) = Matrix::new(lnode);
 
         Self { inodes, lnodes, root_idx, last_insertion_cache: None }
     }
@@ -657,20 +699,43 @@ impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
     /// Note that the `parent` field of the given inode should be updated
     /// before calling this method.
     #[inline(always)]
-    fn push_inode(&mut self, mut inode: Inode<ARITY, L>) -> InodeIdx {
-        let idx = InodeIdx(self.inodes.len());
+    fn push_inode(&mut self, inode: Inode<ARITY, L>) -> InodeIdx {
+        let idx = InodeIdx(self.inodes.push(inode));
+
         assert!(!idx.is_dangling());
-        inode.pushed(self, idx);
-        self.inodes.push(inode);
+
+        let children = self.inode(idx).children();
+
+        // Transmute the children into the same type to get around Rust's
+        // aliasing rules.
+        let children = unsafe {
+            mem::transmute::<_, Either<&[InodeIdx], &[LeafIdx]>>(children)
+        };
+
+        match children {
+            Either::Internal(internal_idxs) => {
+                for &InodeIdx(child_idx) in internal_idxs {
+                    let child_inode = self.inodes.get_mut(child_idx);
+                    *child_inode.parent_mut() = idx;
+                }
+            },
+
+            Either::Leaf(leaf_idxs) => {
+                for &LeafIdx(child_idx) in leaf_idxs {
+                    let child_lnode = self.lnodes.get_mut(child_idx);
+                    *child_lnode.parent_mut() = idx;
+                }
+            },
+        }
+
         idx
     }
 
     /// Pushes a leaf node to the Gtree, returning its index.
     #[inline]
     fn push_leaf(&mut self, leaf: L, parent: InodeIdx) -> LeafIdx {
-        let idx = LeafIdx(self.lnodes.len());
-        self.lnodes.push(Lnode::new(leaf, parent));
-        idx
+        let lnode = Lnode::new(leaf, parent);
+        LeafIdx(self.lnodes.push(lnode))
     }
 
     #[inline]
@@ -1107,30 +1172,6 @@ impl<const ARITY: usize, L: Leaf> Inode<ARITY, L> {
     #[inline(always)]
     fn parent_mut(&mut self) -> &mut InodeIdx {
         &mut self.parent
-    }
-
-    /// Called when this inode has been pushed to the Gtree and has been
-    /// assigned the given `InodeIdx`.
-    ///
-    /// This is used to update the parent field of all the children of this
-    /// inode.
-    #[inline]
-    fn pushed(&mut self, gtree: &mut Gtree<ARITY, L>, to_idx: InodeIdx) {
-        match self.children() {
-            Either::Internal(internal_idxs) => {
-                for &idx in internal_idxs {
-                    let child_inode = gtree.inode_mut(idx);
-                    *child_inode.parent_mut() = to_idx;
-                }
-            },
-
-            Either::Leaf(leaf_idxs) => {
-                for &idx in leaf_idxs {
-                    let child_lnode = gtree.lnode_mut(idx);
-                    *child_lnode.parent_mut() = to_idx;
-                }
-            },
-        }
     }
 
     /// Split this inode at the given offset, returning the right side of the
@@ -1612,11 +1653,17 @@ mod debug {
 
     use super::*;
 
+    impl Debug for MatrixIdx {
+        fn fmt(&self, f: &mut Formatter) -> FmtResult {
+            write!(f, "{}:{}", self.row, self.col)
+        }
+    }
+
     /// Custom Debug implementation which always prints the output in a single
     /// line even when the alternate flag (`{:#?}`) is enabled.
     impl Debug for InodeIdx {
         fn fmt(&self, f: &mut Formatter) -> FmtResult {
-            write!(f, "InodeIdx({})", self.0)
+            write!(f, "InodeIdx({:?})", self.0)
         }
     }
 
@@ -1624,7 +1671,7 @@ mod debug {
     /// line even when the alternate flag (`{:#?}`) is enabled.
     impl Debug for LeafIdx {
         fn fmt(&self, f: &mut Formatter) -> FmtResult {
-            write!(f, "LeafIdx({})", self.0)
+            write!(f, "LeafIdx({:?})", self.0)
         }
     }
 
@@ -1649,21 +1696,23 @@ mod debug {
     );
 
     impl<const N: usize, L: Leaf> Debug for DebugAsSelf<'_, N, L> {
-        fn fmt(&self, f: &mut Formatter) -> FmtResult {
-            let gtree = self.0;
+        fn fmt(&self, _f: &mut Formatter) -> FmtResult {
+            let _gtree = self.0;
 
-            let debug_inodes = DebugInodesSequentially {
-                inodes: gtree.inodes.as_slice(),
-                root_idx: gtree.root_idx.0,
-            };
+            todo!();
 
-            let debug_lnodes =
-                DebugLnodesSequentially(gtree.lnodes.as_slice());
+            //let debug_inodes = DebugInodesSequentially {
+            //    inodes: gtree.inodes.as_slice(),
+            //    root_idx: gtree.root_idx.0,
+            //};
 
-            f.debug_map()
-                .entry(&DebugAsDisplay(&"inodes"), &debug_inodes)
-                .entry(&DebugAsDisplay(&"lnodes"), &debug_lnodes)
-                .finish()
+            //let debug_lnodes =
+            //    DebugLnodesSequentially(gtree.lnodes.as_slice());
+
+            //f.debug_map()
+            //    .entry(&DebugAsDisplay(&"inodes"), &debug_inodes)
+            //    .entry(&DebugAsDisplay(&"lnodes"), &debug_lnodes)
+            //    .finish()
         }
     }
 
