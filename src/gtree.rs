@@ -244,7 +244,6 @@ impl<const ARITY: usize, L: Leaf> Gtree<ARITY, L> {
     }
 
     /// TODO: docs
-    #[inline]
     pub fn delete<DelRange, DelFrom, DelUpTo>(
         &mut self,
         range: Range<L::Length>,

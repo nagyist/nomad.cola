@@ -18,7 +18,7 @@ pub struct InsertionRun {
     lamport_ts: LamportTimestamp,
 
     /// TODO: docs
-    is_deleted: bool,
+    visible_len: u64,
 }
 
 impl core::fmt::Debug for InsertionRun {
@@ -30,7 +30,7 @@ impl core::fmt::Debug for InsertionRun {
             self.character_range,
             self.lamport_ts.as_u64(),
             self.inserted_at,
-            if self.is_deleted { " 🪦" } else { "" },
+            if self.is_deleted() { " 🪦" } else { "" },
         )
     }
 }
@@ -79,7 +79,7 @@ impl InsertionRun {
 
     #[inline]
     pub fn delete(&mut self) {
-        self.is_deleted = true;
+        self.visible_len = 0;
     }
 
     #[inline]
@@ -89,11 +89,11 @@ impl InsertionRun {
         //id_registry: &mut RunIdRegistry,
     ) -> Option<Self> {
         if offset == 0 {
-            self.is_deleted = true;
+            self.delete();
             None
         } else if offset < self.len() {
             let mut del = self.split(offset /* , id_registry */)?;
-            del.is_deleted = true;
+            del.delete();
             Some(del)
         } else {
             None
@@ -117,7 +117,7 @@ impl InsertionRun {
         } else {
             let rest = self.split(end /* id_registry */);
             let deleted = self.split(start /* id_registry */).map(|mut d| {
-                d.is_deleted = true;
+                d.delete();
                 d
             });
             (deleted, rest)
@@ -134,12 +134,17 @@ impl InsertionRun {
             None
         } else if offset < self.len() {
             let rest = self.split(offset /* id_registry */);
-            self.is_deleted = true;
+            self.delete();
             rest
         } else {
-            self.is_deleted = true;
+            self.delete();
             None
         }
+    }
+
+    #[inline]
+    fn is_deleted(&self) -> bool {
+        self.visible_len == 0
     }
 
     #[inline(always)]
@@ -164,9 +169,9 @@ impl InsertionRun {
         Self {
             inserted_at,
             inserted_by,
+            visible_len: character_range.end - character_range.start,
             character_range,
             lamport_ts,
-            is_deleted: false,
         }
     }
 
@@ -210,8 +215,9 @@ impl InsertionRun {
 }
 
 impl gtree::Delete for InsertionRun {
+    #[inline]
     fn delete(&mut self) {
-        self.is_deleted = true;
+        self.delete()
     }
 }
 
@@ -295,7 +301,7 @@ impl Summarize for InsertionRun {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        self.len() * (!self.is_deleted as u64)
+        self.visible_len
     }
 }
 
@@ -314,7 +320,7 @@ impl gtree::Length<u64> for u64 {
 impl gtree::Joinable for InsertionRun {
     #[inline]
     fn append(&mut self, other: Self) -> Option<Self> {
-        if self.is_deleted == other.is_deleted
+        if self.is_deleted() == other.is_deleted()
             && self.replica_id() == other.replica_id()
             && self.end() == other.start()
         {
@@ -327,7 +333,7 @@ impl gtree::Joinable for InsertionRun {
 
     #[inline]
     fn prepend(&mut self, other: Self) -> Option<Self> {
-        if self.is_deleted == other.is_deleted
+        if self.is_deleted() == other.is_deleted()
             && self.replica_id() == other.replica_id()
             && other.end() == self.start()
         {
