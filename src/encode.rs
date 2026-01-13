@@ -43,7 +43,7 @@ impl Encode for bool {
 }
 
 impl Decode for bool {
-    type Value = bool;
+    type Value = Self;
     type Error = BoolDecodeError;
 
     #[inline]
@@ -125,7 +125,7 @@ impl Encode for usize {
 }
 
 impl Decode for usize {
-    type Value = usize;
+    type Value = Self;
     type Error = <u64 as Decode>::Error;
 
     #[inline(always)]
