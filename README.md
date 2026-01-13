@@ -2,11 +2,11 @@
 
 [![Latest version]](https://crates.io/crates/cola)
 [![Docs badge]][docs]
-[![CI]](https://github.com/nomad/cola/actions)
+[![CI]](https://github.com/noib3/cola/actions)
 
 [Latest version]: https://img.shields.io/crates/v/cola.svg
 [Docs badge]: https://docs.rs/cola/badge.svg
-[CI]: https://github.com/nomad/cola/actions/workflows/ci.yml/badge.svg
+[CI]: https://github.com/noib3/cola/actions/workflows/ci.yml/badge.svg
 
 cola is a Conflict-free Replicated Data Type specialized for real-time
 collaborative editing of plain text documents.

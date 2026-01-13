@@ -7,7 +7,7 @@
 ### Fixed
 
 - fixed compilation issues on non-x86 machines
-  ([#16](https://github.com/nomad/cola/pull/16));
+  ([#16](https://github.com/noib3/cola/pull/16));
 
 ## [0.5.0] - Nov 4 2024
 
@@ -49,7 +49,7 @@
   `ReplicaId`s that were between the start and the end of the deleted range,
   instead of including every single `ReplicaId` the `Replica` had ever seen.
   This results in much smaller `Deletion`s when deleting small ranges in
-  buffers edited by many peers ([#9](https://github.com/nomad/cola/pull/9));
+  buffers edited by many peers ([#9](https://github.com/noib3/cola/pull/9));
 
 ## [0.4.3] - Jan 31 2024
 
@@ -70,14 +70,14 @@
 
 - the `Serialize` impl of `Deletion` now produces ~3x smaller payloads,
   depending on the data format used
-  ([#7](https://github.com/nomad/cola/pull/7));
+  ([#7](https://github.com/noib3/cola/pull/7));
 
 - the `Serialize` impl of `EncodedReplica` now produces ~7x smaller payloads,
   depending on the data format used
-  ([#6](https://github.com/nomad/cola/pull/6));
+  ([#6](https://github.com/noib3/cola/pull/6));
 
 - the `Serialize` impl of `Insertion` now produces 3-4x smaller payloads,
-  depending on the data format used ([#5](https://github.com/nomad/cola/pull/5));
+  depending on the data format used ([#5](https://github.com/noib3/cola/pull/5));
 
 ## [0.3.0] - Jan 9 2024
 
@@ -114,15 +114,15 @@
 - fixed a bug that would cause `Replica::decode()` to fail if it was encoded
   on a machine with a different pointer size (#1);
 
-[Unreleased]: https://github.com/nomad/cola/compare/v0.5.1...HEAD
-[0.5.1]: https://github.com/nomad/cola/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/nomad/cola/compare/v0.4.6...v0.5.0
-[0.4.6]: https://github.com/nomad/cola/compare/v0.4.5...v0.4.6
-[0.4.5]: https://github.com/nomad/cola/compare/v0.4.4...v0.4.5
-[0.4.4]: https://github.com/nomad/cola/compare/v0.4.3...v0.4.4
-[0.4.3]: https://github.com/nomad/cola/compare/v0.4.2...v0.4.3
-[0.4.2]: https://github.com/nomad/cola/compare/v0.4.0...v0.4.2
-[0.4.0]: https://github.com/nomad/cola/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/nomad/cola/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/nomad/cola/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/nomad/cola/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/noib3/cola/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/noib3/cola/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/noib3/cola/compare/v0.4.6...v0.5.0
+[0.4.6]: https://github.com/noib3/cola/compare/v0.4.5...v0.4.6
+[0.4.5]: https://github.com/noib3/cola/compare/v0.4.4...v0.4.5
+[0.4.4]: https://github.com/noib3/cola/compare/v0.4.3...v0.4.4
+[0.4.3]: https://github.com/noib3/cola/compare/v0.4.2...v0.4.3
+[0.4.2]: https://github.com/noib3/cola/compare/v0.4.0...v0.4.2
+[0.4.0]: https://github.com/noib3/cola/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/noib3/cola/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/noib3/cola/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/noib3/cola/compare/v0.1.0...v0.2.0
